@@ -10,7 +10,7 @@ enum ZResponse {
     Missed = "missed",
     Hit = "hit",
     HitAndSunk = "hit-and-sunk",
-    Victory = "gewonnen",
+    Victory = "victory",
 }
 
 const vessels = [
@@ -44,11 +44,13 @@ class Player {
     }
 
     toString(hits:null|Board<HitState> = null):string {
-        return Array(this.mySea.cells.length + 1).fill(null).map((_,ri) => {
-            const inter = " ";
-            const mySeaLine = ri == 0 ? this.abc.split("").join(inter) : this.mySea.cells[ri-1].map((v,ci) => hits === null ? v : hits.cells[ri-1][ci] === HitState.Hit ? 'x' : v).join(inter);
-            const hisSeaLine = ri == 0 ? this.abc.split("").join(inter) : this.hisSea.cells[ri-1].join(inter);
-            return (ri < 1 ? " " : String(this.mySea.cells.length + 1 - ri)) + "  " + mySeaLine + "  " + hisSeaLine; 
+        return Array(this.mySea.cells.length + 2).fill(null).map((_,ri) => {
+            const [smallGap, bigGap] = [" ", "    "];
+            const isLetterLine = [0, this.mySea.cells.length + 1].includes(ri);
+            const rowNum = isLetterLine ? " " : String(this.mySea.cells.length + 1 - ri);
+            const mySeaLine = isLetterLine ? this.abc.split("").join(smallGap) : this.mySea.cells[ri-1].map((v,ci) => hits === null ? v : hits.cells[ri-1][ci] === HitState.Hit ? 'x' : v).join(smallGap);
+            const hisSeaLine = isLetterLine ? this.abc.split("").join(smallGap) : this.hisSea.cells[ri-1].join(smallGap);
+            return rowNum + smallGap + hisSeaLine + bigGap + rowNum + mySeaLine; 
         }).join("\n");
 
     }
@@ -60,9 +62,9 @@ class Player {
     async guess():Promise<ZResponse> {
 
         if (!this.opponent)
-            throw "tantrum";
+            throw "tantrum 1";
         while(true) {
-            let coord:number[];
+            let coord:number[]|undefined;
             let tryDir = "U";
             if (this.interactive) {
                 console.log(this.toString(this.opponent.hisSea));
@@ -74,29 +76,25 @@ class Player {
                 coord = [this.mySea.cells.length - parseInt(answer[1]), this.abc.indexOf(answer[0])];
             } else {
                 if (this.memory) {
-                    const c = this.memory.coord;
-                    if (this.memory.dir === "U" && c[0] > 0 && this.hisSea.cells[c[0] - 1][c[1]] === HitState.Unknown) {
-                        coord = [c[0] - 1,c[1]];
-                        tryDir = "V";
-                    } else if (this.memory.dir === "U" && c[0] < this.mySea.cells.length - 1 && this.hisSea.cells[c[0] + 1][c[1]] === HitState.Unknown) {
-                        coord = [c[0] + 1,c[1]];
-                        tryDir = "V";
-                    } else if (this.memory.dir === "U" && c[1] > 0 && this.hisSea.cells[c[0]][c[1] - 1] === HitState.Unknown) {
-                        coord = [c[0],c[1] - 1];
-                        tryDir = "H";
-                    } else if (this.memory.dir === "U") {
-                        coord = [c[0],c[1] + 1];
-                        tryDir = "H";
-                    } else if (this.memory.dir === "V") {
-                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => c[0] + o > 0 && c[0] + o < this.mySea.cells.length && this.hisSea.cells[c[0] + o][c[1]] === HitState.Unknown);
-                        if (!offset)
-                            throw "tantrum";
-                        coord = [c[0] + offset,c[1]];
+                    const mc = this.memory.coord;
+                    const md = this.memory.dir;
+                    if (md === "U" && (coord = [[mc[0] - 1,mc[1]],[mc[0] + 1,mc[1]],[mc[0],mc[1] - 1],[mc[0],mc[1] + 1]].find(xc => xc[0] >= 0 && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
+                        tryDir = [-1,1].includes(mc[0] - coord[0]) ? "V" : "H";
                     } else {
-                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => c[1] + o > 0 && c[1] + o < this.mySea.cells[0].length && this.hisSea.cells[c[0]][c[1] + o] === HitState.Unknown);
+                        let [nb, pb] = [false, false];
+                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => { 
+                            if (mc[md === "V" ? 0 : 1] + o < 0 || mc[md === "V" ? 0 : 1] + o >= this.mySea.cells.length)
+                                return false;
+                            const hs = this.hisSea.cells[mc[0] + (md === "V" ? o : 0)][mc[1] + (md === "V" ? 0 : o)];
+                            if (hs === HitState.Missed) {
+                                nb = nb || o < 0;
+                                pb = pb || o > 0;
+                            }
+                            return (o > 0 || !nb) && (o < 0 || !pb) && hs == HitState.Unknown;
+                        });
                         if (!offset)
-                            throw "tantrum";
-                        coord = [c[0],c[1] + offset];
+                            throw "tantrum 2";
+                        coord = [mc[0] + (md === "V" ? offset : 0),mc[1] + (md === "V" ? 0 : offset)];
                     }
                 } else {
                     coord = [Math.floor(Math.random() * this.hisSea.cells.length), Math.floor(Math.random() * this.hisSea.cells[0].length)];
@@ -113,6 +111,12 @@ class Player {
                     else if (this.memory.dir === "U")
                         this.memory.dir = tryDir;                    
                 } else if ([ZResponse.HitAndSunk, ZResponse.Victory].includes(outcome)) {
+                    if (!this.memory)
+                        throw "tantrum 5";
+                    if ("VH".includes(this.memory.dir)) {
+                        this._secureMissed(this.memory.coord, -1);
+                        this._secureMissed(this.memory.coord, 1);
+                    }
                     this.memory = null;
                 }
                 return outcome;
@@ -120,9 +124,25 @@ class Player {
         }
     }
 
+    _secureMissed(coord:number[], step:number) {
+        if (this.hisSea.cells[coord[0]][coord[1]] !== HitState.Hit) {
+            this.hisSea.cells[coord[0]][coord[1]] = HitState.Missed;
+            return;
+        }
+        const md = this.memory?.dir;
+        [-1, 1].forEach(ofs => {
+            if (md === "V" && ![-1, this.mySea.cells[0].length].includes(coord[1] + ofs) || md !== "V" && ![-1, this.mySea.cells.length].includes(coord[0] + ofs))
+                this.hisSea.cells[coord[0]+(md==="V" ? 0 : ofs)][coord[1]+(md==="V" ? ofs : 0)] = HitState.Missed;
+        });
+        const delta = [coord[0] + (md === "V" ? step : 0), coord[1] + (md === "V" ? 0 : step)];
+        if (![-1, this.mySea.cells.length].includes(delta[0]) && ![-1, this.mySea.cells[0].length].includes(delta[1]))
+            this._secureMissed(delta, step);
+
+    }    
+
     async evaluate(coord:number[], hisGuesses:Board<HitState>):Promise<ZResponse> {
         if (!this.opponent)
-            throw "tantrum";
+            throw "tantrum 4";
         const missed = this.mySea.cells[coord[0]][coord[1]] == VesselState.Empty;
         hisGuesses.cells[coord[0]][coord[1]] = missed ? HitState.Missed : HitState.Hit;
         let resp:ZResponse;
