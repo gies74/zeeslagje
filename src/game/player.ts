@@ -69,23 +69,25 @@ class Player {
             if (this.interactive) {
                 console.log(this.toString(this.opponent.hisSea));
                 let answer = "";
-                const re = RegExp(`^[${this.abc}][1-${this.mySea.cells.length}]$`);
+                const re = RegExp(`^[${this.abc}][1-${this.mySea.cells.length}]$`, "i");
                 while (!re.test(answer))
                     answer = await rl.question("Which coords? ");
 
-                coord = [this.mySea.cells.length - parseInt(answer[1]), this.abc.indexOf(answer[0])];
+                coord = [this.mySea.cells.length - parseInt(answer[1]), this.abc.indexOf(answer[0].toUpperCase())];
             } else {
                 if (this.memory) {
                     const mc = this.memory.coord;
                     const md = this.memory.dir;
-                    if (md === "U" && (coord = [[mc[0] - 1,mc[1]],[mc[0] + 1,mc[1]],[mc[0],mc[1] - 1],[mc[0],mc[1] + 1]].find(xc => xc[0] >= 0 && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
-                        tryDir = [-1,1].includes(mc[0] - coord[0]) ? "V" : "H";
+                    if (md === "U" && (coord = [[mc[0] - 1,mc[1]],[mc[0] + 1,mc[1]],[mc[0],mc[1] - 1],[mc[0],mc[1] + 1]].find(xc => ![-1,this.mySea.cells.length].includes(xc[0]) && ![-1,this.mySea.cells[0].length].includes(xc[1]) && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
+                        tryDir = Math.abs(mc[0] - coord[0]) === 1 ? "V" : "H";
                     } else {
                         let [nb, pb] = [false, false];
-                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => { 
-                            if (mc[md === "V" ? 0 : 1] + o < 0 || mc[md === "V" ? 0 : 1] + o >= this.mySea.cells.length)
+                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => {
+                            const nxt = [mc[0] + (md === "V" ? o : 0), mc[1] + (md === "V" ? 0 : o)];
+                            if (nxt[0] < 0 || nxt[0] >= this.mySea.cells.length || nxt[1] < 0 || nxt[1] >= this.mySea.cells[0].length) {
                                 return false;
-                            const hs = this.hisSea.cells[mc[0] + (md === "V" ? o : 0)][mc[1] + (md === "V" ? 0 : o)];
+                            }
+                            const hs = this.hisSea.cells[nxt[0]][nxt[1]];
                             if (hs === HitState.Missed) {
                                 nb = nb || o < 0;
                                 pb = pb || o > 0;
