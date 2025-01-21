@@ -1,7 +1,8 @@
 import { Player, ZResponse } from "./game/player";
 
 const main = async () => {
-    const players:Player[] = [new Player(true), new Player(false)];
+    console.log("ffewjij");
+    const players:Player[] = [new Player(false), new Player(true)];
 
     players[0].opponent = players[1];
     players[1].opponent = players[0];
@@ -24,7 +25,3 @@ const main = async () => {
 };
 
 main();
-
-
-
-

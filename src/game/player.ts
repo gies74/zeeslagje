@@ -78,11 +78,15 @@ class Player {
                 if (this.memory) {
                     const mc = this.memory.coord;
                     const md = this.memory.dir;
-                    if (md === "U" && (coord = [[mc[0] - 1,mc[1]],[mc[0] + 1,mc[1]],[mc[0],mc[1] - 1],[mc[0],mc[1] + 1]].find(xc => ![-1,this.mySea.cells.length].includes(xc[0]) && ![-1,this.mySea.cells[0].length].includes(xc[1]) && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
+                    const r1 = 2 * Math.floor(2 * Math.random()) - 1;
+                    const coords = [[mc[0] - r1,mc[1]],[mc[0] + r1,mc[1]],[mc[0],mc[1] - r1],[mc[0],mc[1] + r1]];
+                    if (Math.random() < 0.5)
+                        coords.reverse();
+                    if (md === "U" && (coord = coords.find(xc => ![-1,this.mySea.cells.length].includes(xc[0]) && ![-1,this.mySea.cells[0].length].includes(xc[1]) && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
                         tryDir = Math.abs(mc[0] - coord[0]) === 1 ? "V" : "H";
                     } else {
                         let [nb, pb] = [false, false];
-                        const offset = [-1,1,-2,2,-3,3,-4,4].find(o => {
+                        const offset = [-1,1,-2,2,-3,3,-4,4].map(o => r1 * o).find(o => {
                             const nxt = [mc[0] + (md === "V" ? o : 0), mc[1] + (md === "V" ? 0 : o)];
                             if (nxt[0] < 0 || nxt[0] >= this.mySea.cells.length || nxt[1] < 0 || nxt[1] >= this.mySea.cells[0].length) {
                                 return false;
@@ -99,7 +103,18 @@ class Player {
                         coord = [mc[0] + (md === "V" ? offset : 0),mc[1] + (md === "V" ? 0 : offset)];
                     }
                 } else {
-                    coord = [Math.floor(Math.random() * this.hisSea.cells.length), Math.floor(Math.random() * this.hisSea.cells[0].length)];
+                    const crds0: number[][] = [];
+                    const suggested = [4, 2].map(mod => this.hisSea.cells.reduce((coords, row, ri) => { 
+                        const crds1: number[][] = [];
+                        return coords.concat(row.reduce((rcoords, cell, ci) => {
+                            if ((ci + ri) % mod === 1 && cell === HitState.Unknown) {
+                                rcoords.push([ri,ci]);
+                            }
+                            return rcoords;
+                        }, crds1)); 
+                    }, crds0));
+                    const suggUse:number[][] = suggested[0].length ? suggested[0] : suggested[1];
+                    coord = suggUse[Math.floor(Math.random() * suggUse.length)];
                 }
             }
             if (this.hisSea.cells[coord[0]][coord[1]] === HitState.Unknown) {
@@ -113,9 +128,7 @@ class Player {
                     else if (this.memory.dir === "U")
                         this.memory.dir = tryDir;                    
                 } else if ([ZResponse.HitAndSunk, ZResponse.Victory].includes(outcome)) {
-                    if (!this.memory)
-                        throw "tantrum 5";
-                    if ("VH".includes(this.memory.dir)) {
+                    if (this.memory && "VH".includes(this.memory.dir)) {
                         this._secureMissed(this.memory.coord, -1);
                         this._secureMissed(this.memory.coord, 1);
                     }
