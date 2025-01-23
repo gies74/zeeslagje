@@ -11,15 +11,14 @@ const main = async () => {
 
     while (response !== ZResponse.Victory) {
         do {
-            response = await players[turn % 2].guess();
+            response = await players[turn % players.length].guess();
         } while ([ZResponse.Hit, ZResponse.HitAndSunk].includes(response));
 
         turn++;
     }
-    console.log(`TOTAL DESTRUCTION! Player ${1 + 1 - (turn%2)} won in ${Math.ceil(turn / 2)} turns!`);
+    console.log(`TOTAL DESTRUCTION! Player won in ${Math.ceil(turn / players.length)} turns!`);
     console.log(``);
-    console.log(`Player 1:\n${players[0].toString()}`);
-    console.log(`Player 2:\n${players[1].toString()}`);
+    players.forEach((p,pi) => console.log(`Player ${pi + 1}:\n${p.toString()}`));
     process.exit(0);
 };
 

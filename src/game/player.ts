@@ -29,7 +29,6 @@ class Memory {
     }
 }
 
-
 class Player {
     mySea:Board<VesselState>;
     hisSea:Board<HitState>;
@@ -67,6 +66,7 @@ class Player {
             let coord:number[]|undefined;
             let tryDir = "U";
             if (this.interactive) {
+                // human: enter coordinates manually
                 console.log(this.toString(this.opponent.hisSea));
                 let answer = "";
                 const re = RegExp(`^[${this.abc}][1-${this.mySea.cells.length}]$`, "i");
@@ -74,49 +74,50 @@ class Player {
                     answer = await rl.question("Which coords? ");
 
                 coord = [this.mySea.cells.length - parseInt(answer[1]), this.abc.indexOf(answer[0].toUpperCase())];
+            } else if (!this.memory) {
+                // computer: pick coordinate on diagonals spaced 4 apart at first, later diagonals in between
+                const crds0: number[][] = [];
+                const suggested = [1, 3].map(remainder => this.hisSea.cells.reduce((coords, row, ri) => { 
+                    const crds1: number[][] = [];
+                    return coords.concat(row.reduce((rcoords, cell, ci) => {
+                        if ((ci + ri) % 4 === remainder && cell === HitState.Unknown) {
+                            rcoords.push([ri,ci]);
+                        }
+                        return rcoords;
+                    }, crds1)); 
+                }, crds0));
+                const suggUse:number[][] = suggested[0].length ? suggested[0] : suggested[1];
+                coord = suggUse[Math.floor(Math.random() * suggUse.length)];
             } else {
-                if (this.memory) {
-                    const mc = this.memory.coord;
-                    const md = this.memory.dir;
-                    const r1 = 2 * Math.floor(2 * Math.random()) - 1;
-                    const coords = [[mc[0] - r1,mc[1]],[mc[0] + r1,mc[1]],[mc[0],mc[1] - r1],[mc[0],mc[1] + r1]];
-                    if (Math.random() < 0.5)
-                        coords.reverse();
-                    if (md === "U" && (coord = coords.find(xc => ![-1,this.mySea.cells.length].includes(xc[0]) && ![-1,this.mySea.cells[0].length].includes(xc[1]) && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
-                        tryDir = Math.abs(mc[0] - coord[0]) === 1 ? "V" : "H";
-                    } else {
-                        let [nb, pb] = [false, false];
-                        const offset = [-1,1,-2,2,-3,3,-4,4].map(o => r1 * o).find(o => {
-                            const nxt = [mc[0] + (md === "V" ? o : 0), mc[1] + (md === "V" ? 0 : o)];
-                            if (nxt[0] < 0 || nxt[0] >= this.mySea.cells.length || nxt[1] < 0 || nxt[1] >= this.mySea.cells[0].length) {
-                                return false;
-                            }
-                            const hs = this.hisSea.cells[nxt[0]][nxt[1]];
-                            if (hs === HitState.Missed) {
-                                nb = nb || o < 0;
-                                pb = pb || o > 0;
-                            }
-                            return (o > 0 || !nb) && (o < 0 || !pb) && hs == HitState.Unknown;
-                        });
-                        if (!offset)
-                            throw "tantrum 2";
-                        coord = [mc[0] + (md === "V" ? offset : 0),mc[1] + (md === "V" ? 0 : offset)];
-                    }
+                // computer: pick likely coordinate after earlier hit
+                const mc = this.memory.coord;
+                const md = this.memory.dir;
+                const r1 = 2 * Math.floor(2 * Math.random()) - 1;
+                const coords = [[mc[0] - r1,mc[1]],[mc[0] + r1,mc[1]],[mc[0],mc[1] - r1],[mc[0],mc[1] + r1]];
+                if (Math.random() < 0.5)
+                    coords.reverse();
+                if (md === "U" && (coord = coords.find(xc => ![-1,this.mySea.cells.length].includes(xc[0]) && ![-1,this.mySea.cells[0].length].includes(xc[1]) && this.hisSea.cells[xc[0]][xc[1]] === HitState.Unknown))) {
+                    tryDir = Math.abs(mc[0] - coord[0]) === 1 ? "V" : "H";
                 } else {
-                    const crds0: number[][] = [];
-                    const suggested = [4, 2].map(mod => this.hisSea.cells.reduce((coords, row, ri) => { 
-                        const crds1: number[][] = [];
-                        return coords.concat(row.reduce((rcoords, cell, ci) => {
-                            if ((ci + ri) % mod === 1 && cell === HitState.Unknown) {
-                                rcoords.push([ri,ci]);
-                            }
-                            return rcoords;
-                        }, crds1)); 
-                    }, crds0));
-                    const suggUse:number[][] = suggested[0].length ? suggested[0] : suggested[1];
-                    coord = suggUse[Math.floor(Math.random() * suggUse.length)];
+                    let [nb, pb] = [false, false];
+                    const offset = [-1,1,-2,2,-3,3,-4,4].map(o => r1 * o).find(o => {
+                        const nxt = [mc[0] + (md === "V" ? o : 0), mc[1] + (md === "V" ? 0 : o)];
+                        if (nxt[0] < 0 || nxt[0] >= this.mySea.cells.length || nxt[1] < 0 || nxt[1] >= this.mySea.cells[0].length) {
+                            return false;
+                        }
+                        const hs = this.hisSea.cells[nxt[0]][nxt[1]];
+                        if (hs === HitState.Missed) {
+                            nb = nb || o < 0;
+                            pb = pb || o > 0;
+                        }
+                        return (o > 0 || !nb) && (o < 0 || !pb) && hs == HitState.Unknown;
+                    });
+                    if (!offset)
+                        throw "tantrum 2";
+                    coord = [mc[0] + (md === "V" ? offset : 0),mc[1] + (md === "V" ? 0 : offset)];
                 }
             }
+
             if (this.hisSea.cells[coord[0]][coord[1]] === HitState.Unknown) {
                 const outcome = await this.opponent.evaluate(coord, this.hisSea);
                 if (this.interactive) {
@@ -135,6 +136,8 @@ class Player {
                     this.memory = null;
                 }
                 return outcome;
+            } else {
+                console.log(`Picked known coordinate?`);
             }
         }
     }
